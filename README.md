@@ -7,6 +7,9 @@ Implements the **third-place** method: a two-stage CoT pipeline with DTD visual
 forgery detection and two LoRA-adapted Qwen3-VL-32B models for forensic reasoning
 and report generation.
 
+<img width="3632" height="1318" alt="dtd_example" src="https://github.com/user-attachments/assets/357b6417-586a-4856-9f4c-df86594e5b63" />
+
+
 ## Method overview
 
 1. **DTD** — statistical visual forgery detector, produces tampering probability maps
