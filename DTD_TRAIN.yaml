@@ -1,0 +1,98 @@
+# Train DTD on RealText-V2 (multilingual document forgery detection).
+# Run via:  python scripts/train_forensichub_realtext_v2.py --config <this_yaml>
+#
+# Substitute any `<...>` placeholder with your actual paths before running.
+
+# ---------------- DDP ----------------
+gpus: "0,1,2,3,4,5,6,7"
+flag: train
+
+# ---------------- Log ----------------
+log_dir: "./log/realtext_v2_dtd"
+
+# ---------------- Task ----------------
+if_predict_label: false       # we have only mask GT, not image-level labels
+if_predict_mask: true
+
+# ---------------- Model ----------------
+model:
+  name: DTD
+  init_config:
+    convnext_path: './convnext_small.pth'
+    swin_path:     './swintransformerv2_small.pth'
+
+# ---------------- Train dataset ----------------
+train_dataset:
+  name: RealTextV2Dataset
+  dataset_name: RealTextV2_train
+  init_config:
+    path: './RealText-V2_forensichub/ONLY_JPG'
+    split: train
+    dct_path: './ForensicHub/dtd_train/qt_table_ori.pk'
+    # language_filter: [en, zh, th, ms, id, ar]   # optional
+
+# ---------------- Test datasets (for periodic eval during training) ----------------
+test_dataset:
+  - name: RealTextV2Dataset
+    dataset_name: RealTextV2_val
+    init_config:
+      path: './RealText-V2_forensichub/ONLY_JPG'
+      split: val
+      train: false
+      dct_path: './ForensicHub/dtd_train/qt_table_ori.pk'
+
+# ---------------- Transform ----------------
+transform:
+  name: DocTransform
+  init_config:
+    norm_type: image_net
+    output_size: [512, 512]
+
+# ---------------- Evaluators ----------------
+evaluator:
+  - name: PixelF1
+    init_config:
+      threshold: 0.5
+  - name: ImageF1
+    init_config:
+      threshold: 0.5
+
+# ---------------- Training ----------------
+resume: ''
+batch_size: 16          # per GPU
+test_batch_size: 8
+epochs: 20            # RealText-V2 is smaller than DocTamper; 30 is enough
+accum_iter: 1
+record_epoch: 0
+
+# ---------------- Test ----------------
+no_model_eval: false
+test_period: 1
+
+# ---------------- Logging ----------------
+log_per_epoch_count: 20
+
+# ---------------- DDP & AMP ----------------
+find_unused_parameters: true
+use_amp: true
+
+# ---------------- Optimizer ----------------
+opt: 'AdamW'
+weight_decay: 0.05
+lr: 1e-4
+blr: 0.001
+min_lr: 5e-7
+warmup_epochs: 1
+
+# ---------------- Misc ----------------
+device: "cuda"
+seed: 42
+start_epoch: 0
+num_workers: 8
+pin_mem: true
+
+# ---------------- Distributed ----------------
+world_size: 1
+local_rank: -1
+dist_on_itp: false
+dist_url: "env://"

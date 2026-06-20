@@ -1,0 +1,131 @@
+You are creating high-quality training data for a smaller forensic-document model (the "student"). You have temporary, privileged access to ground-truth information that the student will NEVER see at inference time. Your job is to PRODUCE a believable, audit-quality 4-stage chain-of-thought reasoning that a smart analyst could plausibly produce given ONLY the inputs the student sees, but that arrives precisely at the ground-truth conclusions.
+
+================================================================
+INPUTS THE STUDENT SEES (and that you also see)
+================================================================
+1. The original document image (first image attached).
+2. The DTD heatmap overlay (second image attached).
+3. OCR output (text + bboxes), provided as JSON below.
+4. DTD-flagged bounding boxes, in image-pixel coordinates, provided below.
+
+================================================================
+PRIVILEGED INPUTS (visible only to you, the teacher)
+================================================================
+5. The ground-truth tampering report (with refined coordinates).
+6. Precise tampering bboxes derived from the ground-truth segmentation mask.
+7. Per-DTD-region labels: TP (overlaps mask = real tampering, KEEP) or FP (no overlap = false alarm, DROP).
+
+================================================================
+STUDENT INPUTS
+================================================================
+
+OCR INPUT
+=========
+{{OCR_JSON}}
+
+DTD FLAGGED REGIONS (visual evidence, in image-pixel coordinates)
+=================================================================
+{{DTD_HINTS}}
+
+
+================================================================
+PRIVILEGED HINTS — USE TO GUIDE YOUR REASONING, NEVER REVEAL
+================================================================
+
+DTD REGIONS WITH GROUND-TRUTH LABELS
+====================================
+{{DTD_TP_FP_LABELS}}
+
+PRECISE TAMPERING REGIONS FROM GT MASK
+====================================================================================================
+{{MASK_BBOX_HINTS}}
+
+GROUND-TRUTH TARGET REPORT
+===========================================================================================
+{{AUGMENTED_GT_REPORT}}
+
+================================================================
+RULES FOR STUDENT
+================================================================
+A. **Region inside a paragraph or between words.** A DTD region sitting inside running prose or between words, with surrounding clean text, is very likely tampered text. Look closely: there will usually be a slight font, weight, baseline, or kerning inconsistency relative to neighbouring text. → most often **Visual Clumsy** if the artefact is visible, **Semantic Subtle** if the substituted word is visually clean but contextually wrong, **Logical Fraud** if a numeric value was changed.
+
+B. **Blurred / JPEG-distorted text.** Blur, smearing, or heavy JPEG-compression artefacts inside a DTD region are deliberate manipulation attempts to obscure content. → **Visual Clumsy**.
+
+C. **Solid rectangle / white-out / black-out.** Solid coloured rectangles, white empty patches, black/grey bars over content are redactions. → **Visual Clumsy**.
+
+D. **Empty area in the middle of running text.** A clear empty gap that breaks the natural flow of words inside a paragraph or sentence indicates someone deleted text. → **Visual Clumsy** (if the gap itself is visible) or sometimes a marker for a removed value (**Logical Fraud**).
+
+E. **Blurred logo / stamp / seal.** A logo, stamp, or seal that is blurred, smudged, partially erased, or visibly retouched while the surrounding document is sharp — a deliberate attempt to obscure the issuing institution. → **Visual Clumsy**.
+
+F. **Numeric value where the digits look clean.** A DTD region tightly bounding a number, date, percentage, total, page number, or statistic, with no visible visual artefact. The digits themselves may be perfectly rendered, but the VALUE is the tampering. → **Logical Fraud**.
+
+G. **Single word or short phrase, visually clean, in running prose.** A DTD region tightly bounding one or two words in body text, where the rendering looks fine but the word makes the local context contradictory. → **Semantic Subtle**.
+
+DROP RULES (the only valid reasons to remove a DTD region):
+
+H. **Tiny, weak, irregular shape, on the heat map mostly blue-green rather than red/yellow, AND not approximately rectangular.** Likely DTD noise. Drop.
+
+I. **In document margins / blank borders / far from any text/figure/table content,** AND visually empty (no redaction-like patch). Likely a low-quality false positive. Drop.
+
+J. **Mathematical content in a math-heavy document with massive DTD activation,** AND the formula renders cleanly with no edit artefact. Drop — DTD is misfiring on math glyph statistics.
+
+
+================================================================
+HARD RULES FOR YOU
+================================================================
+
+1. **Never reveal that you have privileged information.** Forbidden phrases include but are not limited to: "given the answer", "since we know", "the GT says", "according to the ground truth", "the mask shows", "the answer is", "we already know", "as revealed", "it is given that". Reason from the visible inputs (image, heatmap, OCR, DTD) ONLY.
+
+2. When localizing fabricated regions, insert not coordinates from "PRECISE TAMPERING REGIONS FROM GT MASK", but *either* the coordinates derived from the DTD *or* those derived from the OCR, if they intersect. Otherwise use the region from "PRECISE TAMPERING REGIONS FROM GT MASK". The goal is to convey to the student that they can obtain precise coordinates from the existing information, rather than having to invent anything themselves. Just cross-reference with the ground truth regions from the section "PRECISE TAMPERING REGIONS FROM GT MASK"
+
+3. **Walk through every DTD region in Stage 2.** Use the privileged TP/FP labels to decide KEEP/DROP, but justify the verdict with reasons that can be inferred from the image/heatmap/OCR (what the region looks like, what it overlaps, which case A–J from "RULES FOR STUDENT" applies). Never write "this is TP" or "this is FP" or "the label says".
+
+4. **In Stage 3, look for any anomalies in "GROUND-TRUTH TARGET REPORT" that are NOT covered by DTD regions.** Re-derive them from semantic/logical reasoning over the OCR text. Articulate the contradiction.
+
+================================================================
+OUTPUT STRUCTURE — NO DEVIATION
+================================================================
+
+Output ONLY <think>...</think>. Do not generate <report>.
+The final <report> will be inserted by the pipeline and must not be produced by the model.
+
+Inside `<think>`, follow the 5 stages used by the student's prompt:
+
+<think>
+
+--- STAGE 1: Knowledge Preparation ---
+Read the OCR `reading_order_text` end-to-end. Identify document type, domain, language, layout conventions, and the real-world common-sense constraints legitimate values would obey. State a global judgment about DTD: "DTD trustworthy here" / "DTD misfiring on math content" / "mixed". (Use the privileged TP/FP distribution to inform this judgment, but justify with what the document looks like — math content, prose density, etc.)
+
+--- STAGE 2: Per-Region Walk-Through ---
+For EACH DTD region in the order given, if DTD trustworthy, produce a structured block:
+
+REGION_NNN  [coords from DTD]
+  Location:        Header / body paragraph N / footer / margin / table cell / signature block / logo or stamp area / formula block / blank area / etc.
+  Surroundings:    Plain prose / math / a logo / a table row / an empty margin.
+  OCR overlap:     Which OCR items intersect (cite exact text) or "no OCR overlap".
+  Visual content:  What the IMAGE shows inside (clean text / blurred text / solid rectangle / white patch / partial logo / formula / etc.).
+  Likely case:     Which case A–J from the "RULES FOR STUDENT" applies, ALIGNED with ground truth from "GROUND-TRUTH TARGET REPORT"
+  Type (if kept):  Visual Clumsy / Logical Fraud / Semantic Subtle, with one sentence justifying the choice that does NOT cite the privileged labels.
+  Verdict:         KEEP or DROP
+
+Make verdicts match the privileged TP/FP labels; phrase justifications in terms of visual evidence.
+
+--- STAGE 3: Independent Semantic Search ---
+Re-read the document. Look for anomalies that are NOT in the DTD list but appear in "GROUND-TRUTH TARGET REPORT". For each, articulate Q1 (what was the original / what is now), Q2 (why it's semantically wrong), Q3 (whether DTD overlaps). Do not invent extras beyond what's in "GROUND-TRUTH TARGET REPORT". If "GROUND-TRUTH TARGET REPORT" contains no purely-semantic anomalies (all of them already overlap DTD regions), say so briefly.
+
+--- STAGE 4: Final naming, ordering and Grounding ---
+Combine Stage 2 keeps and Stage 3 candidates. Unambiguously map them to the numbered anomalies from the ground truth report "GROUND-TRUTH TARGET REPORT". Your only task here is to take real DTD or OCR coordinates instead of those in "PRECISE TAMPERING REGIONS FROM GT MASK", if they intersect. For each kept anomaly, state the final [GROUNDING] coordinates. If the forged region is covered by a region from the DTD or OCR, use *either* the coordinates derived from the DTD *or* those derived from the OCR. Otherwise use the region from "PRECISE TAMPERING REGIONS FROM GT MASK". Cross-check against the ground truth mask; the IoU should be good. If necessary, combine multiple regions from the OCR output. The final list must match "GROUND-TRUTH TARGET REPORT" exactly (same count, same types, same order, same names). Format should always be: 
+
+"
+ANOMALY_003: Semantic_subtle (Manager Title Code Alteration) 
+[GROUNDING]:[299, 1632, 401, 1664]
+"
+
+</think>
+
+================================================================
+TONE
+================================================================
+Detective-like, evidence-driven, concrete. Cite OCR item ids and DTD region indices. Quote exact OCR text fragments. Use specific visual descriptors ("hard-edged grey rectangle", "baseline shift of approximately 2 pixels", "compressed JPEG block"). Avoid generic hedging ("this looks suspicious", "might be tampered"). Avoid first-person admissions of having an answer.
+
+Begin now.

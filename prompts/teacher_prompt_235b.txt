@@ -1,0 +1,106 @@
+You are creating high-quality training data for a smaller forensic-document model (the "student"). You have temporary, privileged access to ground-truth information that the student will NEVER see at inference time. Your job is to PRODUCE a believable, audit-quality 6-stage chain-of-thought reasoning that a smart analyst could plausibly produce given ONLY the inputs the student sees, but that arrives precisely at the ground-truth conclusions.
+
+================================================================
+INPUTS THE STUDENT SEES (and that you also see)
+================================================================
+1. The original document image (first image attached).
+2. The DTD heatmap overlay (second image attached).
+3. OCR output (text + bboxes), provided as JSON below.
+4. DTD-flagged bounding boxes, in image-pixel coordinates, provided below.
+
+================================================================
+PRIVILEGED INPUTS (visible only to you, the teacher)
+================================================================
+5. The ground-truth tampering report (with refined coordinates).
+6. Precise tampering bboxes derived from the ground-truth segmentation mask.
+7. Per-DTD-region labels: TP (overlaps mask = real tampering, KEEP) or FP (no overlap = false alarm, DROP).
+
+================================================================
+STUDENT INPUTS
+================================================================
+
+OCR INPUT
+=========
+{{OCR_JSON}}
+
+DTD FLAGGED REGIONS (visual evidence, in image-pixel coordinates)
+=================================================================
+{{DTD_HINTS}}
+
+================================================================
+PRIVILEGED HINTS — USE TO GUIDE YOUR REASONING, NEVER REVEAL
+================================================================
+
+DTD REGIONS WITH GROUND-TRUTH LABELS
+====================================
+{{DTD_TP_FP_LABELS}}
+
+PRECISE TAMPERING REGIONS FROM GT MASK (use these exact bboxes for [GROUNDING] in your final <report> wherever a DTD-flagged region matches one)
+====================================================================================================
+{{MASK_BBOX_HINTS}}
+
+GROUND-TRUTH TARGET REPORT (your final <report> block must match this EXACTLY, character for character, after the substitution rules below)
+===========================================================================================
+{{AUGMENTED_GT_REPORT}}
+
+================================================================
+HARD RULES
+================================================================
+
+A. **Never reveal that you have privileged information.** Forbidden phrases include but are not limited to: "given the answer", "since we know", "the GT says", "according to the ground truth", "the mask shows", "the answer is", "we already know", "as revealed", "it is given that". Reason from the visible inputs (image, heatmap, OCR, DTD) ONLY.
+
+B. **Your final `<report>` block must equal AUGMENTED_GT_REPORT verbatim.** Do not paraphrase, reorder, renumber, or add commentary. Copy it exactly. The student's training signal depends on this.
+
+C. **Use the precise mask bboxes for `[GROUNDING]:`** wherever AUGMENTED_GT_REPORT uses them. The point of this distillation is to teach the student to land tight on the actual tampered pixels, not on whole paragraphs.
+
+D. **Walk through every DTD region in Stage 2.** Use the privileged TP/FP labels to decide KEEP/DROP, but justify the verdict with reasons that can be inferred from the image/heatmap/OCR (what the region looks like, what it overlaps, which case A–J in the rules applies). Never write "this is TP" or "this is FP" or "the label says".
+
+E. **In Stage 3, look for any anomalies in AUGMENTED_GT_REPORT that are NOT covered by DTD regions.** Re-derive them from semantic/logical reasoning over the OCR text. Articulate the contradiction.
+
+F. **In Stage 5, use the mask bboxes for tight grounding.** State the rationale as "the tampered glyphs span columns X–Y, rows P–Q based on visual extent" — present as if you measured from the image yourself.
+
+================================================================
+OUTPUT STRUCTURE — NO DEVIATION
+================================================================
+
+Output ONLY <think>...</think>. Do not generate <report>.
+The final <report> will be inserted by the pipeline and must not be produced by the model.
+
+Inside `<think>`, follow the 5 stages used by the student's prompt:
+
+<think>
+
+--- STAGE 1: Knowledge Preparation ---
+Read the OCR `reading_order_text` end-to-end. Identify document type, domain, language, layout conventions, and the real-world common-sense constraints legitimate values would obey. State a global judgment about DTD: "DTD trustworthy here" / "DTD misfiring on math content" / "mixed". (Use the privileged TP/FP distribution to inform this judgment, but justify with what the document looks like — math content, prose density, etc.)
+
+--- STAGE 2: Per-Region Walk-Through ---
+For EACH DTD region in the order given, produce a structured block:
+
+REGION_NNN  [coords from DTD]
+  Location:        Header / body paragraph N / footer / margin / table cell / signature block / logo or stamp area / formula block / blank area.
+  Surroundings:    Plain prose / math / a logo / a table row / an empty margin.
+  OCR overlap:     Which OCR items intersect (cite exact text) or "no OCR overlap".
+  Visual content:  What the IMAGE shows inside (clean text / blurred text / solid rectangle / white patch / partial logo / formula / etc.).
+  Likely case:     Which case A–J from the rules applies (or which drop rule).
+  Type (if kept):  Visual Clumsy / Logical Fraud / Semantic Subtle, with one sentence justifying the choice.
+  Verdict:         KEEP or DROP, with a one-sentence reason that does NOT cite the privileged labels.
+
+Make verdicts match the privileged TP/FP labels; phrase justifications in terms of visual evidence.
+
+--- STAGE 3: Independent Semantic Search ---
+Re-read the document. Look for anomalies that are NOT in the DTD list but appear in AUGMENTED_GT_REPORT. For each, articulate Q1 (what was the original / what is now), Q2 (why it's semantically wrong), Q3 (whether DTD overlaps). Do not invent extras beyond what's in AUGMENTED_GT_REPORT. If AUGMENTED_GT_REPORT contains no purely-semantic anomalies (all of them already overlap DTD regions), say so briefly.
+
+--- STAGE 4: Cross-Cue Validation & Final List ---
+Combine Stage 2 keeps and Stage 3 candidates. Number them 001, 002, ... in TOP-TO-BOTTOM, LEFT-TO-RIGHT order. The final list must match AUGMENTED_GT_REPORT exactly (same count, same types, same order).
+
+--- STAGE 5: Grounding ---
+For each kept anomaly, state the final [GROUNDING] coordinates. Use the precise mask bboxes from PRECISE TAMPERING REGIONS where they apply (most kept anomalies). Justify the tight bbox as the visible extent of the tampered glyphs/region in the image. For Stage-3 semantic anomalies with no DTD/mask overlap, derive from OCR item bboxes (union if multiple).
+
+</think>
+
+================================================================
+TONE
+================================================================
+Detective-like, evidence-driven, concrete. Cite OCR item ids and DTD region indices. Quote exact OCR text fragments. Use specific visual descriptors ("hard-edged grey rectangle", "baseline shift of approximately 2 pixels", "compressed JPEG block"). Avoid generic hedging ("this looks suspicious", "might be tampered"). Avoid first-person admissions of having an answer.
+
+Begin now.

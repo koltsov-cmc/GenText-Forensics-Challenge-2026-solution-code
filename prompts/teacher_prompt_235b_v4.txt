@@ -1,0 +1,196 @@
+You are creating high-quality training data for a smaller forensic-document model (the "student"). You have temporary, privileged access to ground-truth information that the student will NEVER see at inference time. Your job is to produce a believable, audit-quality 4-stage chain-of-thought reasoning that a smart analyst could plausibly produce given ONLY the inputs the student sees, but that arrives precisely at the ground-truth conclusions.
+
+================================================================
+INPUTS THE STUDENT SEES (and that you also see)
+================================================================
+1. The original document image (first image attached).
+2. The DTD heatmap overlay (second image attached).
+3. OCR output (text + bboxes), provided as JSON below.
+4. DTD-flagged bounding boxes, in image-pixel coordinates, provided below.
+
+================================================================
+PRIVILEGED INPUTS (visible only to you, the teacher)
+================================================================
+5. The ground-truth tampering report (with refined coordinates).
+6. Precise tampering bboxes derived from the ground-truth segmentation mask.
+7. Per-DTD-region labels: TP (overlaps mask = real tampering, KEEP) or FP (no overlap = false alarm, DROP).
+
+================================================================
+STUDENT INPUTS
+================================================================
+
+OCR INPUT
+=========
+{{OCR_JSON}}
+
+DTD FLAGGED REGIONS (visual evidence, in image-pixel coordinates)
+=================================================================
+{{DTD_HINTS}}
+
+================================================================
+PRIVILEGED HINTS — USE TO GUIDE YOUR REASONING, NEVER REVEAL
+================================================================
+
+DTD REGIONS WITH GROUND-TRUTH LABELS
+====================================
+{{DTD_TP_FP_LABELS}}
+
+PRECISE TAMPERING REGIONS FROM GT MASK
+======================================
+{{MASK_BBOX_HINTS}}
+
+Each entry in "PRECISE TAMPERING REGIONS FROM GT MASK" is an augmented GT mask region record that includes:
+- the GT mask bbox,
+- DTD bboxes that intersect the mask region,
+- OCR bboxes/text that intersect the mask region,
+- and the IoU values of those overlaps.
+
+GROUND-TRUTH TARGET REPORT
+==========================
+{{AUGMENTED_GT_REPORT}}
+
+================================================================
+RULES FOR STUDENT (cases A–J — same rules the student will follow at inference time)
+================================================================
+
+CASES STRONGLY FAVOURING KEEP:
+
+A. **Region inside a paragraph or between words.** A DTD region sitting inside running prose or between words, with surrounding clean text, is very likely tampered text. → most often **Visual Clumsy** if the artefact is visible, **Semantic Subtle** if the substituted word is visually clean but contextually wrong, **Logical Fraud** if a numeric value was changed.
+
+B. **Blurred / JPEG-distorted text.** Blur, smearing, or heavy JPEG-compression artefacts inside a DTD region. → **Visual Clumsy**.
+
+C. **Solid rectangle / white-out / black-out.** Solid coloured rectangles, white empty patches, black/grey bars over content. → **Visual Clumsy**.
+
+D. **Empty area in the middle of running text.** A clear empty gap that breaks the natural flow of words. → **Visual Clumsy** or **Logical Fraud** (removed value).
+
+E. **Blurred logo / stamp / seal** while surrounding document is sharp. → **Visual Clumsy**.
+
+F. **Numeric value where the digits look clean.** Tightly-bounded number, date, percentage, total, page number, or statistic, no visible artefact. → **Logical Fraud**.
+
+G. **Single word or short phrase, visually clean, in running prose** that contradicts surrounding context. → **Semantic Subtle**.
+
+DROP RULES (the only valid reasons to remove a DTD region):
+
+H. **Tiny, weak, irregular shape**, mostly blue-green on the heatmap rather than red/yellow, AND not approximately rectangular. → DTD noise, drop.
+
+I. **In document margins / blank borders, far from any content,** AND visually empty. → low-quality false positive, drop.
+
+J. **Math content in a math-heavy document with massive DTD activation,** AND the formula renders cleanly. → DTD misfiring on math glyph statistics, drop.
+
+================================================================
+OUTPUT STRUCTURE — NO DEVIATION
+================================================================
+
+Output ONLY a `<think>...</think>` block. Do NOT generate `<report>`. The final `<report>` will be inserted by the pipeline.
+
+Inside `<think>`, follow the 4 stages exactly:
+
+<think>
+
+--- STAGE 1: Knowledge Preparation ---
+Read the OCR `reading_order_text` end-to-end. Identify document type, domain, language, and the layout/common-sense constraints that legitimate values would obey. State a global DTD judgment: "DTD trustworthy here" / "DTD misfiring on math content" / "mixed". Justify the judgment with what the document looks like (prose density, math content, table density), not with the TP/FP statistics.
+
+--- STAGE 2: Per-Region Walk-Through ---
+For EACH DTD region from "DTD FLAGGED REGIONS", if trusted, in the order given, write 1–2 concise sentences that (a) name what the region visually contains and where it sits, (b) cite the relevant rule from A–J, and only THEN (c) state the KEEP/DROP verdict with the type if kept. The verdict goes at the END of the sentence, AFTER the evidence — so the reasoning leads to the conclusion, not the other way around. Cite OCR item ids and quote short OCR fragments where useful. TP DTD regions must be KEEP, and FP DTD regions must be DROP (with explanation).
+
+**KEY GUIDANCE — visual cleanness is NOT a drop signal for TP-labelled regions.** Most tampering in the target report is **Semantic Subtle** or **Logical Fraud**, where the digits / words render cleanly and there is NO visible artefact. 
+
+Format for each region:
+`REGION_NNN [x1, y1, x2, y2]: <one or two sentences combining visual/contextual observation, rule citation, and the reasoning>. → <KEEP as Visual Clumsy/Logical Fraud/Semantic Subtle | DROP>.`
+
+The verdict "Visual Clumsy/Logical Fraud/Semantic Subtle" should be EXACTLY THE SAME as in the GT report for one concrete anomaly, found by DTD in this stage.
+
+Examples of the right voice (do not copy verbatim):
+
+`REGION_001 [2244, 310, 2335, 346]: The region tightly bounds the policy number "9.99" in the top-right header (OCR item 4); the digits render cleanly but the header value contradicts the body text reference to "Board policy 3:50" later in the document — Rule F (numeric value altered to a logically inconsistent number). → KEEP as Logical Fraud.`
+
+`REGION_003 [1379, 1103, 1459, 1134]: The region tightly bounds the percentage "96%" (OCR item 51) in the attendance target sentence; the digits render perfectly cleanly but the surrounding policy text implies the original threshold was different — a clean-looking TP with no visual artefact is the signature of Rule F (value alteration). → KEEP as Logical Fraud.`
+
+`REGION_005 [1630, 782, 1801, 831]: The word "Review" (OCR item 87) renders cleanly but the following body text mentions "the preview displays..."; the heading contradicts its own paragraph — Rule G (clean substitution creating a semantic contradiction). → KEEP as Semantic Subtle.`
+
+`REGION_007 [50, 50, 70, 70]: A tiny, ~20×20 px region in the top-left margin, mostly weak blue activation on the heatmap, far from any text or figure — Rule I (margin false positive). → DROP.`
+
+The 1–2-sentence format above is the only allowed form for Stage 2.
+
+If there are no DTD regions, just paste "No DTD regions were flagged for this document, as indicated by the "DTD FLAGGED REGIONS" input"
+
+--- STAGE 3: Independent Semantic and Logical Search, Rethinking ---
+Re-read the document. Compare your Stage-2 KEEP list against "GROUND-TRUTH TARGET REPORT". Stage 3 covers every target anomaly that did NOT end up in your Stage 2 KEEP list — typically anomalies where DTD missed the location entirely (purely semantic substitutions in clean text, value alterations DTD did not flag). For each such anomaly, write 1–2 sentences answering: what the original was likely to be vs what it is now, why it's semantically wrong (cite the contradiction with surrounding OCR text), and the OCR item(s) involved. Do NOT invent anomalies beyond those in the target report.
+
+Also at this stage, rethink DTD regions that are close to each other and intersect with the same anomaly. Give the reasoning that leads to the fact that these regions found the same anomaly
+
+NEVER mention target report!
+
+Format should be:
+'STAGE2_missed_001: {1–2 sentences corresponding GT report from GT report "GROUND-TRUTH TARGET REPORT"}'
+or
+'STAGE2_rethinked_001: {1–2 sentences corresponding GT report from GT report "GROUND-TRUTH TARGET REPORT", in case of multiple DTD-regions corresponding to one GT-region}'
+
+If your Stage 2 KEEP list already covers every target anomaly, write one short line: "All target anomalies are covered by Stage 2 KEEP regions; no additional Stage-3 candidates."
+
+--- STAGE 4: Final naming, ordering, grounding and bridging ---
+Combine the Stage-2 KEEPs and Stage-3 additions. **Count check before proceeding:** the combined count MUST equal the number of anomalies in "GROUND-TRUTH TARGET REPORT". If it doesn't, go back to Stage 2 (you wrongly dropped a TP region) or Stage 3 (you missed a semantic anomaly), and fix.
+
+Number the combined anomalies 001, 002, ... in TOP-TO-BOTTOM, LEFT-TO-RIGHT order. Each line must precisely match the corresponding entry in "GROUND-TRUTH TARGET REPORT" in name and type. For `[GROUNDING]`, apply the **3-step algorithm from Hard Rule 2**: DTD-TP first, then OCR (intersecting the mask), then mask as last resort. Never use FP-DTD coordinates. Never copy mask coordinates when DTD-TP or OCR is available.
+
+**Coordinate strategy — overlap-aware 3-step algorithm.** For each anomaly in "GROUND-TRUTH TARGET REPORT", make its `[GROUNDING]` bbox in this order:
+
+   **Step 1.** Look at the augmented mask region in "PRECISE TAMPERING REGIONS FROM GT MASK WITH OVERLAPING DTD BBOXES AND OCR BBOXES". If there is ONE DTD region overlapping this GT mask region, use **exactly the coordinates from the DTD** as `[GROUNDING]`. Do not refine or modify the DTD coordinates. They are TP. If there are MULTIPLE DTD region overlapping this GT mask region, combine them into one. Refer to stage 3
+
+   **Step 2.** If the DTD missed a semantic region, meaning there is an OCR overlap but **no DTD overlap** in the same GT region, then use the OCR bbox, or the union of OCR bboxes if needed, that intersects the GT mask and semantically matches the anomaly description. Use OCR coordinates rather than hallucinating a box.
+
+   **Step 3.** If there are no intersections with either OCR or DTD in the augmented GT region, then copy the region from the GT mask as `[GROUNDING]`.
+
+   **Hard constraints:**
+   * Never use an FP-DTD bbox as `[GROUNDING]`.
+   * Never copy mask coordinates when Step 1 or Step 2 produced a result.
+   * Every remaining FP DTD region must be discarded with reason.
+
+After this, for each anomaly formulate 1-2 sentences that BRIDGE the analysis from stages 1-3 and the GT report from "GROUND-TRUTH TARGET REPORT".
+This is necessary so that the student does not invent this stage separately from the analysis at stages 1-3, but learns to prepare the ground for generating a report. 
+
+Specifically, <bridging sentence> should contain the key clues that you derived for the anomaly in the previous 1-3 stages, and at the same time be associated with the description of this anomaly from the GT report. Key clues of anomalies from stages 1-3 may coincide with key things from the GT report, but this is not always the case, you may need to insert key things from the GT report as well, in order to "build a bridge".
+Dont mention GT report.
+
+Format (no extra prose):
+
+`
+ANOMALY_NNN: <Type> (<Short name>)
+[GROUNDING]: [x1, y1, x2, y2]
+Preliminary: <bridging sentence>
+`
+
+If the document has no confirmed forgeries, then dont output any anomalies here. Just paste "No anomalies found"
+
+</think>
+
+================================================================
+HARD RULES FOR YOU (THE TEACHER)
+================================================================
+
+1. **Never reveal that you have privileged information.** Forbidden phrases include but are not limited to: "given the answer", "since we know", "the GT says", "according to the ground truth", "the mask shows", "the answer is", "we already know", "as revealed", "it is given that", "the TP/FP label". Reason as if you only have image + heatmap + OCR + DTD.
+
+2. **Walk through every DTD region in Stage 2.** Use the privileged TP/FP labels to set the verdict:
+   * **If a region is labelled TP — it MUST be KEEP.** Do not drop a TP-labelled region just because the visual evidence looks clean. A clean-looking region that is TP is exactly the signature of **Semantic Subtle** (word substitution with no visual artefact) or **Logical Fraud** (value altered but digits render fine). When TP label and visual cleanness disagree, the resolution is "this is Semantic Subtle / Logical Fraud", NOT "this is FP".
+   * **If a region is labelled FP — it MUST be DROP.** Justify with one of rules H / I / J or a one-sentence visual reason.
+   * Justify every verdict in terms inferrable from image / heatmap / OCR / GT-target context. Never write "this is TP" or "the label says".
+
+3. **Stage 3 finds anomalies present in "GROUND-TRUTH TARGET REPORT" that did NOT end up in your Stage 2 KEEP list.** This includes:
+   * anomalies where DTD did not flag any region at all (purely-semantic discoveries),
+   * anomalies where DTD flagged a region but you correctly classified the surrounding semantics — these may need extra context in Stage 3 even if the bbox came from Stage 2.
+   For each Stage 3 anomaly, re-derive it from semantic/logical reasoning over the OCR text. Articulate the contradiction. Do NOT invent anomalies beyond what is in the target report.
+
+4. If one GT region corresponds to TWO or more DTD regions, then combine them, taking into account the coordinates of this region from the GT report
+
+5. **Coverage check.** The total number of distinct anomalies you describe across Stage 2 (KEEPs) and Stage 3 MUST equal the number of anomalies in "GROUND-TRUTH TARGET REPORT". If you find that some target anomalies are missing from your combined list, you have either wrongly dropped a TP region in Stage 2 (fix it) or missed a Stage 3 semantic anomaly (find and add it).
+
+Final report language matches the GROUND-TRUTH TARGET REPORT language.
+
+> **CRITICAL**: Your output MUST start with `<think>` and end with `</think>`. Do NOT produce ANY text outside `<think>...</think>`. Do NOT produce XML. Do NOT produce a final report. Do NOT produce markdown headers. The `<report>` block is inserted later by the pipeline — you only think.
+
+================================================================
+TONE
+================================================================
+Detective-like, evidence-driven, concrete. Cite OCR item ids and DTD region indices. Quote short exact OCR fragments. Use specific visual descriptors ("hard-edged grey rectangle", "baseline shift of ~2 px", "compressed JPEG block"). Avoid generic hedging ("this looks suspicious", "might be tampered"). Never admit to having an answer.
+
+Begin now.

@@ -1,0 +1,130 @@
+You are creating high-quality training data for a smaller forensic-document model (the "student"). You are analyzing a PRISTINE document — a document with NO tampering, NO forgery, NO alterations. Any regions flagged by the DTD visual detector are ALL false positives.
+
+Your job is to produce a believable, audit-quality chain-of-thought reasoning that walks through the document and arrives at the AUTHENTIC verdict. The student must learn to recognise pristine documents and reject DTD false alarms with concrete visual reasoning.
+
+================================================================
+INPUTS THE STUDENT SEES (and that you also see)
+================================================================
+1. The original document image (first image attached).
+2. The DTD heatmap overlay (second image attached).
+3. OCR output (text + bboxes), provided as JSON below.
+4. DTD-flagged bounding boxes, in image-pixel coordinates, provided below.
+
+================================================================
+PRIVILEGED CONTEXT (visible only to you, the teacher)
+================================================================
+This document has been verified as AUTHENTIC. There are NO tampering regions anywhere on the page. Any DTD-flagged regions you see below are 100% FALSE POSITIVES — DTD misfiring on legitimate document content (fonts, layout edges, dense numerals, logos, etc.).
+
+================================================================
+STUDENT INPUTS
+================================================================
+
+OCR INPUT
+=========
+{{OCR_JSON}}
+
+DTD FLAGGED REGIONS (visual evidence, in image-pixel coordinates — ALL FALSE POSITIVES)
+=================================================================
+{{DTD_HINTS}}
+
+================================================================
+RULES FOR STUDENT (cases A–J — same rules the student will follow at inference time)
+================================================================
+
+CASES STRONGLY FAVOURING KEEP (when tampering IS present — not the case here):
+
+A. **Region inside a paragraph or between words.** A DTD region sitting inside running prose or between words, with surrounding clean text, is very likely tampered text.
+
+B. **Blurred / JPEG-distorted text.** Blur, smearing, or heavy JPEG-compression artefacts inside a DTD region.
+
+C. **Solid rectangle / white-out / black-out.** Solid coloured rectangles, white empty patches, black/grey bars over content.
+
+D. **Empty area in the middle of running text.** A clear empty gap that breaks the natural flow of words.
+
+E. **Blurred logo / stamp / seal** while surrounding document is sharp.
+
+F. **Numeric value where the digits look clean.** Tightly-bounded number with no visible artefact — usually Logical Fraud.
+
+G. **Single word or short phrase, visually clean, in running prose** that contradicts surrounding context.
+
+DROP RULES (the only valid reasons to remove a DTD region — ALL APPLICABLE HERE):
+
+H. **Tiny, weak, irregular shape**, mostly blue-green on the heatmap rather than red/yellow, AND not approximately rectangular. → DTD noise, drop.
+
+I. **In document margins / blank borders, far from any content,** AND visually empty. → low-quality false positive, drop.
+
+J. **Math content in a math-heavy document with massive DTD activation,** AND the formula renders cleanly. → DTD misfiring on math glyph statistics, drop.
+
+ADDITIONAL DROP REASONS FOR PRISTINE DOCUMENTS:
+
+K. **Region sits on consistent, well-rendered text** that is grammatically and semantically coherent with the surrounding paragraph. The DTD activation is likely a font-statistics artefact, not real tampering.
+
+L. **Region overlaps a logo, stamp, header rule, or graphic element** that is part of the original layout and shows no editing artefact. DTD frequently misfires on dense graphics.
+
+M. **Region overlaps a numeric value that is consistent with the document's own internal logic** (date matches header, total matches line-items, percentage is plausible). DTD's statistical signal does not imply tampering when the value is logically valid.
+
+================================================================
+OUTPUT STRUCTURE — NO DEVIATION
+================================================================
+
+Output ONLY a `<think>...</think>` block. Do NOT generate `<report>`. The final `<report>` will be inserted by the pipeline.
+
+Inside `<think>`, follow these 2 stages exactly:
+
+<think>
+
+--- STAGE 1: Knowledge Preparation ---
+Read the OCR `reading_order_text` end-to-end. Identify document type, domain, language, and the layout / common-sense constraints that legitimate values would obey. State a global DTD judgment: "DTD misfiring on this document" / "mixed but no real tampering" — phrase it as if you arrived at the verdict from visual inspection, not from knowing the document is pristine. Justify with what the document looks like (prose density, table density, presence of logos, math content, etc.).
+
+Conclude Stage 1 with a one-sentence note that the document appears internally consistent: dates align, values are plausible, names are coherent, no obvious redactions or overpainting are visible.
+
+--- STAGE 2: Per-Region Walk-Through (all DROPs) ---
+For EACH DTD region in the order given, write 1–2 concise sentences that (a) name what the region visually contains and where it sits, (b) cite the relevant DROP rule from H / I / J / K / L / M, and only THEN (c) state the DROP verdict. The verdict goes at the END of the sentence, AFTER the evidence. Cite OCR item ids and quote short OCR fragments where useful.
+
+EVERY DTD region must be DROPPED in this case — the document is pristine. Justify each drop with concrete visual / contextual reasoning that explains why DTD's statistical signal does NOT correspond to real tampering. Vary the phrasing — do not write the same template for every region.
+
+Format for each region:
+`REGION_NNN [x1, y1, x2, y2]: <one or two sentences combining visual / contextual observation, drop-rule citation, and the reasoning>. → DROP.`
+
+Examples of the right voice (do not copy verbatim):
+
+`REGION_001 [340, 220, 510, 268]: The region sits on the document title "PURCHASE ORDER" (OCR item 3); the letters render uniformly with consistent stroke width and baseline, and the title's wording is standard for this document type — Rule K (DTD misfires on dense uppercase text). → DROP.`
+
+`REGION_002 [1120, 880, 1280, 920]: The region overlaps the company logo in the top-right corner; the graphic is sharp, integrated with the page background, and contains no editing artefacts — Rule L (DTD misfires on graphic elements). → DROP.`
+
+`REGION_003 [60, 50, 95, 90]: A tiny, ~35×40 px region in the upper-left margin with weak blue-green heatmap activation, far from any text or figure, visually empty — Rule I (margin false positive). → DROP.`
+
+`REGION_004 [820, 1330, 940, 1370]: The region encloses the date "March 18, 2016" (OCR item 47); the digits render cleanly, match the document's stated review period, and show no kerning anomalies — Rule M (DTD activation on a numerically valid date). → DROP.`
+
+The 1–2-sentence format above is the only allowed form for Stage 2. Process every region; do not skip any.
+
+If there are no DTD regions at all, write: "No DTD regions were flagged for this document; nothing to walk through."
+
+After Stage 2, conclude with one short summary sentence:
+
+`Conclusion: All DTD activations are accounted for as false positives on legitimate content; no anomalies remain.`
+
+</think>
+
+================================================================
+HARD RULES FOR YOU (THE TEACHER)
+================================================================
+
+1. **Never reveal that you have privileged information.** Forbidden phrases include: "given the answer", "since we know", "the GT says", "according to the ground truth", "we already know", "as revealed", "it is given that", "the document is verified as authentic", "the FP label". Phrase every drop as if you reached it from visual inspection alone.
+
+2. **Every DTD region MUST be DROP.** This document is pristine. There are no KEEPs in Stage 2. Justify each drop with concrete visual / contextual evidence — do NOT just say "this is a false positive" without explanation.
+
+3. **No anomalies. No `ANOMALY_NNN:` blocks. No `[GROUNDING]:` blocks.** The output is purely the 2-stage walkthrough above. The pipeline will insert the AUTHENTIC report afterwards.
+
+4. **Do NOT invent anomalies** to "balance" the analysis. The document is pristine; the only valid output is a clean walk-through where every region is dropped with reasoning.
+
+5. **Vary the drop rationales.** Do not write the same sentence for every region. Use the actual visual content of each region (text quoted, location, surroundings) to make every drop unique and concrete.
+
+> **CRITICAL**: Your output MUST start with `<think>` and end with `</think>`. Do NOT produce ANY text outside `<think>...</think>`. Do NOT produce XML. Do NOT produce a final report. Do NOT produce markdown headers. The `<report>` block is inserted later by the pipeline — you only think.
+
+================================================================
+TONE
+================================================================
+Detective-like, evidence-driven, concrete. Cite OCR item ids and DTD region indices. Quote short exact OCR fragments. Use specific visual descriptors ("hard-edged grey rectangle", "baseline shift of ~2 px", "compressed JPEG block"). Avoid generic hedging ("this looks suspicious", "might be tampered"). Never admit to having an answer.
+
+Begin now.

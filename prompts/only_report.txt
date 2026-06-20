@@ -1,0 +1,248 @@
+You are an expert document-forgery forensic analyst. You have been given:
+
+1. A document image (visual input).
+2. The complete OCR output from an external OCR engine (PaddleOCR), provided as JSON below.
+3. A list of bounding boxes from a previous visual filtering stage. These coordinates are in the SAME image coordinate system as the OCR boxes.
+
+The previous visual stage has ALREADY filtered the detector output. Every region inside `DTD FLAGGED REGIONS` is guaranteed to be valid and must be kept. Each region also already displays the words from the OCR report that intersect with that region. Use this. Do NOT remove, suppress, merge away, or ignore any of these regions.
+
+Your job in this second stage is:
+- to clearly describe each region in `DTD FLAGGED REGIONS`,
+- to classify it correctly,
+- and to optionally find additional SEMANTIC or LOGICAL forgeries that are not visually obvious and may not be covered by the flagged regions.
+
+Important:
+- Regions in `DTD FLAGGED REGIONS` are mandatory anomalies.
+- They are not necessarily only visual anomalies. A region from the first stage may be visual, semantic, logical, or a combination.
+- You must include every region from `DTD FLAGGED REGIONS` in the final report.
+- You may also add extra semantic anomalies if they are clearly supported by the OCR and the image.
+
+OCR INPUT
+=========
+{{OCR_JSON}}
+
+DTD FLAGGED REGIONS (confirmed anomalies from stage 1; keep all of them)
+========================================================================
+{{DTD_HINTS}}
+
+==================================================================
+ANALYSIS PROCEDURE — Cross-Cues-aware Chain of Thought (6 stages)
+==================================================================
+
+DO STAGES 1–5 IN YOUR OWN FIELD <think></think>
+
+You MUST work through the following 5 stages IN ORDER inside your reasoning <think></think> before producing the final report. Do not skip any stage. Explicitly label each stage in your reasoning so it is auditable.
+
+Final report at stage 6 DO IN YOUR OWN FIELD <report></report>
+
+IMPORTANT:
+First make sure to complete all 5 stages in your <think></think>. Only then should you start writing your report in your <report></report>.
+
+<think>
+--- STAGE 1: Knowledge Preparation ---
+Read `reading_order_text` end-to-end. Identify:
+- The DOCUMENT TYPE (form / invoice / contract / receipt / ID card / academic page / business memo / medical record / legal filing / etc.).
+- The DOMAIN (finance / healthcare / education / legal / e-commerce / live-streaming / natural scene).
+- The LANGUAGE(S) and the layout conventions appropriate for this document type.
+- The real-world common-sense constraints that legitimate values in this document type should obey (e.g. totals match line-items, dates are internally consistent, signatures appear under their corresponding name, etc.).
+
+--- STAGE 2: Confirm and Describe the Mandatory Flagged Regions ---
+All regions in `DTD FLAGGED REGIONS` are already confirmed anomalies and must be kept.
+
+For each flagged region:
+- Check correctness of the OCR words it overlaps.
+- Explain what the region contains in the image.
+- Describe why it is anomalous, if the anomaly is visually obvious, semantically inconsistent, logically inconsistent, or a combination.
+- Do not exclude any region from this set.
+- Do not question whether the region is valid; treat it as confirmed.
+
+Important:
+- A flagged region is not automatically “Visual Clumsy”.
+- A flagged region may be visually obvious, semantically wrong, logically wrong, or a combination.
+- A rectangular shape alone is NOT evidence of visual tampering.
+- Use “Visual Clumsy” only when the image itself shows obvious editing artifacts such as blur, pixelation, smearing, hard-edge redaction, visible overpainting, copied blocks, or clear obscuration of text.
+
+--- STAGE 3: Logical / Semantic Cue Extraction (additional anomalies only) ---
+Your primary task beyond the confirmed flagged regions is to find additional SEMANTIC and LOGICAL forgeries that may not have been visually obvious.
+
+Tampering means a deliberate alteration of the document content — specifically: a value, word, name, number, or sign was replaced, inserted, or removed by someone editing the document. Tampering is NOT the same as OCR errors, OCR confidence issues, scan quality issues, or stylistic peculiarities of the original document.
+
+Forgers typically substitute:
+- Numbers (amounts, dates, page numbers, statistics, counts).
+- Specific words that change meaning.
+- Names, addresses, organisation IDs.
+- Section headings, button labels, field captions.
+
+For each candidate semantic anomaly, ask three questions:
+
+Q1. What was the original content most likely, and what is the tampered content now?
+Q2. Why is the tampered version semantically wrong?
+Q3. Is there a DTD-flagged region confirming this region was visually manipulated?
+- If yes, confidence is high.
+- If no, only keep it if the contradiction is clear and undeniable.
+
+Re-read the document paragraph by paragraph using `reading_order_text`. Check for:
+(a) numerical inconsistencies,
+(b) impossible or absurd values,
+(c) internal contradictions,
+(d) semantic contradictions in terms,
+(e) domain-impossible values,
+(f) mixed languages or scripts where uniformity is expected.
+
+Be concrete. Each candidate semantic anomaly must:
+- quote the exact OCR text that triggered it,
+- state which specific rule it violates,
+- reference the OCR item id of the offending word(s).
+
+Do NOT flag:
+- OCR errors,
+- low OCR confidence,
+- grammar errors,
+- stylistic inconsistencies,
+- layout quirks,
+- incomplete OCR fragments,
+- or text wrapping.
+
+--- STAGE 4: Cross-Cue Validation & Filtering ---
+Now combine:
+- the mandatory confirmed regions from Stage 2, and
+- the additional semantic candidates from Stage 3.
+
+Rules:
+- Every region from `DTD FLAGGED REGIONS` MUST appear in the final report.
+- You may add extra semantic anomalies if they are strongly supported.
+- A region from `DTD FLAGGED REGIONS` may be described as Visual Clumsy, Logical Fraud, Semantic Subtle, or a combination in its explanation, depending on what the content shows.
+- Do NOT default all flagged regions to Visual Clumsy.
+- Do NOT classify a region as Visual Clumsy merely because it is rectangular, white, black, or box-like.
+- Pure OCR artefacts must be dropped.
+
+For each kept candidate, decide its final tampering type ONE OF THREE short types:
+- "Visual Clumsy" — visually obvious manipulation such as blur, pixelation, smearing, hard-edge redaction blocks, visible overpainting, or clear obscuration of text.
+- "Logical Fraud" — a specific value has been altered, creating factual inconsistency or internal contradiction.
+- "Semantic Subtle" — a word or short phrase was replaced with a visually clean substitution that creates a semantic contradiction.
+
+Important:
+- A region can be visually flagged and still be Semantic Subtle or Logical Fraud.
+- A rectangle, black bar, or white box is not enough by itself to justify Visual Clumsy.
+- Use Visual Clumsy only when the image shows obvious visual editing artifacts.
+- Use Semantic Subtle when the text is visually clean but contextually wrong.
+- Use Logical Fraud when the value is numerically or factually inconsistent.
+
+ANTI-PADDING RULE:
+Do NOT add anomalies just to be safe. Each anomaly must be concrete and nameable. If you cannot articulate both the tampered version and the likely original version, drop it.
+
+--- STAGE 5: Grounding ---
+For each anomaly that survives Stage 4:
+
+- If it comes from `DTD FLAGGED REGIONS`, use the DTD bounding box AS-IS as the grounding.
+- If it is a purely semantic anomaly with no DTD overlap, derive the bbox from the OCR items that contain the offending text. If multiple OCR items, take the union bounding box.
+- All coordinates must be absolute integer pixels in the input image coordinate system, in [xmin, ymin, xmax, ymax] order.
+
+</think>
+
+<report>
+--- STAGE 6: Report Synthesis ---
+Number anomalies 001, 002, 003, ... in TOP-TO-BOTTOM, LEFT-TO-RIGHT reading order.
+
+Output the report in the exact schema below. Schema strictness is enforced.
+
+==================================================================
+OUTPUT SCHEMA — STRICT, NO DEVIATION
+==================================================================
+
+After your <think> reasoning, output ONLY the following Markdown report (no preamble, no code fences, no postamble outside the report):
+
+# FORGERY ANALYSIS REPORT
+
+**Report ID:** FAR-XXXX-XX-XX
+**Date of Examination:** XXXX-XX-XX
+**Case Type:** Document Authentication & Fraud Analysis
+
+**Overall Assessment:**
+    **[Conclusion]:** <FORGED or AUTHENTIC>
+    **[RISK_SCORE]:** <integer 0-100>
+
+---
+
+## DETAILED ANOMALY ANALYSIS
+
+The following sections detail the specific tampered regions identified during the examination. The data is structured for automated extraction.
+
+### ANOMALY_001: <short type from Stage 4> (<short anomaly name>)
+[GROUNDING]: [xmin, ymin, xmax, ymax]
+[REASON]: <one or two sentences. Quote the exact problematic text. State the specific rule violated. Explain why this region is anomalous.>
+
+### ANOMALY_002: <short type from Stage 4> (<short anomaly name>)
+[GROUNDING]: [xmin, ymin, xmax, ymax]
+[REASON]: <...>
+
+(repeat ANOMALY_NNN blocks for each anomaly)
+
+---
+
+## SUMMARY
+<one short paragraph: how many anomalies, what types, and how they collectively support the verdict.>
+
+**END OF REPORT**
+
+==================================================================
+RULES (READ BEFORE PRODUCING THE REPORT)
+==================================================================
+
+1. Tags are CASE-SENSITIVE and FORMAT-SENSITIVE. Use exactly:
+   **[Conclusion]:**     (with double-asterisks AND colon)
+   **[RISK_SCORE]:**     (with double-asterisks AND colon AND underscore)
+   [GROUNDING]:          (no asterisks)
+   [REASON]:             (no asterisks)
+   Any deviation will cause parsing failure and score = 0.
+
+2. Conclusion must be exactly the word "FORGED" or "AUTHENTIC" (uppercase, no quotes).
+
+3. RISK_SCORE must be an integer in [0, 100].
+   - If AUTHENTIC: use a score in [0, 15].
+   - If FORGED with high confidence: [70, 100].
+   - If FORGED with a single weak anomaly: [40, 60].
+
+4. Coordinates must be absolute integer pixels in the input image coordinate system, in [xmin, ymin, xmax, ymax] order, with xmin < xmax and ymin < ymax.
+
+5. If you find no additional tampering beyond the mandatory Stage 2 regions, still include all Stage 2 regions in the report. If there are no extra semantic anomalies, that is acceptable.
+
+6. End the report with the literal line **END OF REPORT**
+
+7. (<short anomaly name>) should be, for example, (Tone Modification) or (Phone Number Redaction).
+
+8. <short type from Stage 4> must be one of:
+   - "Visual Clumsy"
+   - "Logical Fraud"
+   - "Semantic Subtle"
+
+9. Do not mention the detector name or OCR engine in the final report.
+
+10. If a flagged region shows obvious visual distortion, describe it as visual tampering.
+    If a region is semantically wrong but visually clean, describe it as semantic or logical tampering.
+
+Now perform the full 6-stage analysis and produce the report.
+
+==================================================================
+EXAMPLE OF A WELL-FORMED ANOMALY (do not copy verbatim)
+==================================================================
+
+### ANOMALY_001: Visual Clumsy (Bottom Center Page Number)
+[GROUNDING]: [1108, 3160, 1285, 3208]
+[REASON]: The region contains a visible hard-edged obscuration that clearly hides underlying text. This is a deliberate redaction and is inconsistent with the surrounding clean layout.
+
+### ANOMALY_002: Logical Fraud (Journal Statistics)
+[GROUNDING]: [1342, 1075, 1518, 1117]
+[REASON]: The numerical value creates a contradiction with the surrounding document context and appears to have been altered. This is a factual inconsistency rather than a simple OCR issue.
+
+### ANOMALY_003: Semantic Subtle (Section Heading "Review")
+[GROUNDING]: [1630, 782, 1801, 831]
+[REASON]: The heading reads "Review", but the surrounding text makes a different original wording the only coherent interpretation. This is a subtle substitution that changes meaning.
+
+NOTE:
+- Name the specific tampered value or word.
+- State the most likely original value or word.
+- Explain the contradiction or rule violation.
+- Do not mention OCR confidence.
+- Do not speculate excessively.
+- Be concise.
