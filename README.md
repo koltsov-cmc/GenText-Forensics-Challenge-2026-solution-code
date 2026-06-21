@@ -112,8 +112,8 @@ Notes:
 ```bash
 python scripts/inference/run_two_stage_hf.py \
     --image /path/to/doc.jpg \
-    --stage1_prompt prompts/student_prompt_stage1.txt \
-    --stage2_prompt prompts/student_prompt_stage2.txt \
+    --stage1_prompt prompts/filterer.txt \
+    --stage2_prompt prompts/semantic_detective.txt \
     --out report.json \
     --tta \
     --save_dir debug/
