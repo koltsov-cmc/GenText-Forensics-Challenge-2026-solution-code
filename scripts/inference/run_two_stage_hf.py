@@ -33,8 +33,8 @@ Example
 -------
     python run_two_stage_hf.py \
         --image doc.jpg \
-        --stage1_prompt ../../prompts/student_prompt_stage1.txt \
-        --stage2_prompt ../../prompts/student_prompt_stage2.txt \
+        --filterer_prompt ../../prompts/student_prompt_stage1.txt \
+        --semantic_detective_prompt ../../prompts/student_prompt_stage2.txt \
         --out report.json --tta
 """
 from __future__ import annotations
@@ -549,11 +549,11 @@ def parse_args() -> argparse.Namespace:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--image", required=True, help="Path to a single document image.")
     ap.add_argument("--out", default="report.json", help="Output JSON path.")
-    ap.add_argument("--stage1_prompt", required=True,
-                    help="Stage-1 (Filterer) prompt template with {{DTD_HINTS}}.")
-    ap.add_argument("--stage2_prompt", required=True,
-                    help="Stage-2 (Detective) prompt template with {{OCR_JSON}} "
-                         "and {{FILTERED_DTD}}.")
+    ap.add_argument("--filterer_prompt", required=True,
+                    help="Filterer (stage 1) prompt template with {{DTD_HINTS}}.")
+    ap.add_argument("--semantic_detective_prompt", required=True,
+                    help="Semantic Detective (stage 2) prompt template with "
+                         "{{OCR_JSON}} and {{FILTERED_DTD}}.")
     ap.add_argument("--base_model", default=DEFAULT_BASE_MODEL)
     ap.add_argument("--cache_dir", default=None, help="HF download cache dir.")
     ap.add_argument("--dtd_threshold", type=float, default=0.40)
@@ -584,8 +584,8 @@ def main() -> int:
     if save_dir:
         save_dir.mkdir(parents=True, exist_ok=True)
 
-    stage1_template = Path(args.stage1_prompt).read_text(encoding="utf-8")
-    stage2_template = Path(args.stage2_prompt).read_text(encoding="utf-8")
+    stage1_template = Path(args.filterer_prompt).read_text(encoding="utf-8")
+    stage2_template = Path(args.semantic_detective_prompt).read_text(encoding="utf-8")
 
     # ---- assets ----
     print("[1/6] downloading assets from HF ...", flush=True)

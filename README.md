@@ -112,8 +112,8 @@ Notes:
 ```bash
 python scripts/inference/run_two_stage_hf.py \
     --image /path/to/doc.jpg \
-    --stage1_prompt prompts/student_prompt_stage1.txt \
-    --stage2_prompt prompts/student_prompt_stage2.txt \
+    --filterer_prompt prompts/student_prompt_stage1.txt \
+    --semantic_detective_prompt prompts/student_prompt_stage2.txt \
     --out report.json \
     --tta \
     --save_dir debug/
@@ -126,8 +126,8 @@ The first run downloads the HF assets and the base model (cached for reuse).
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--image` | — | Input document image (required). |
-| `--stage1_prompt` | — | Filterer template (`{{DTD_HINTS}}`). |
-| `--stage2_prompt` | — | Detective template (`{{OCR_JSON}}`, `{{FILTERED_DTD}}`). |
+| `--filterer_prompt` | — | Filterer template (`{{DTD_HINTS}}`). |
+| `--semantic_detective_prompt` | — | Detective template (`{{OCR_JSON}}`, `{{FILTERED_DTD}}`). |
 | `--out` | `report.json` | Output JSON path. |
 | `--dtd_threshold` | `0.40` | DTD probability threshold for regions. |
 | `--tta` | off | 4-pass DTD test-time augmentation (min-combine). |
