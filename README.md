@@ -8,7 +8,7 @@ forgery detection and two LoRA-adapted Qwen3-VL-32B models for forensic reasonin
 and report generation.
 
 <img width="3632" height="1318" alt="dtd_example" src="https://github.com/user-attachments/assets/357b6417-586a-4856-9f4c-df86594e5b63" />
-_An example of a DTD model in action. From left to right: a fragment of a clean document, DTD probabilities derived from bboxes, and a ground truth mask._
+*An example of a DTD model in action. From left to right: a fragment of a clean document, DTD probabilities derived from bboxes, and a ground truth mask.*
 
 ## Method overview
 
