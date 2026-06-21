@@ -137,7 +137,13 @@ def build_dtd(asset_dir: Path, device):
     swin_path = asset_dir / "dtd_backbones" / "swintransformerv2_small.pth"
     model = DTD(convnext_path=str(convnext_path), swin_path=str(swin_path))
 
-    state = torch.load(asset_dir / "dtd.pth", map_location="cpu")
+    # weights_only=False: the checkpoint bundles training state (argparse.Namespace),
+    # which PyTorch >=2.6 blocks under the default weights_only=True. The file comes
+    # from our own trusted HF repo.
+    try:
+        state = torch.load(asset_dir / "dtd.pth", map_location="cpu", weights_only=False)
+    except TypeError:  # older torch without the weights_only kwarg
+        state = torch.load(asset_dir / "dtd.pth", map_location="cpu")
     for key in ("model", "state_dict", "model_state_dict"):
         if isinstance(state, dict) and key in state:
             state = state[key]
