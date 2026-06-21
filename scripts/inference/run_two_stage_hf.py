@@ -650,6 +650,9 @@ def main() -> int:
     out_path.write_text(json.dumps({
         "image_name": image_path.name,
         "report": report,
+        "stage1_filterer_output": stage1_raw,
+        "stage2_detective_output": stage2_raw,
+        "filtered_dtd": filtered_dtd,
         "dtd_threshold": args.dtd_threshold,
         "n_dtd_regions": len(regions),
         "dtd_regions": regions,
