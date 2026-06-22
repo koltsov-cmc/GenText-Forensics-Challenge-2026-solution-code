@@ -3,6 +3,8 @@
 Tooling for the [ACM MM 2026 GenText-Forensics challenge](https://gentext-forensics-acm-mm-2026.github.io/)
 ([Codabench](https://www.codabench.org/competitions/15805/)).
 
+[HuggingFace](https://huggingface.co/datasets/cmcshnik/GenText-Forensics_third_place_additional_materials)
+
 Implements the **third-place** method: a two-stage CoT pipeline with DTD visual
 forgery detection and two LoRA-adapted Qwen3-VL-32B models for forensic reasoning
 and report generation.
