@@ -80,9 +80,6 @@ adapters (`qwen_filterer/`, `qwen_semantic_detective/`) — fetches the
 `Qwen/Qwen3-VL-32B-Instruct` base model, and runs DTD → OCR → Filterer →
 Semantic Detective on one image, writing the final report as JSON.
 
-No local checkpoints, no `ForensicHub`, and no `DTD_TRAIN.yaml` are needed: the
-DTD model is built directly from the bundled backbone weights.
-
 ### 1. Environment
 
 A CUDA GPU is strongly recommended (the 32B base model is large; expect
